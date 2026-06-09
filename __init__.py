@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Config
 # ---------------------------------------------------------------------------
 
-_DEFAULT_TEMPLATE = "-# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
+_DEFAULT_TEMPLATE = "> -# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
 _config_cache: Dict[str, Any] | None = None
 
 

@@ -17,4 +17,4 @@
 #   {chars}          - characters in the assistant response (e.g. "1.2K")
 #   {provider}       - API provider (e.g. "openrouter", "anthropic")
 
-template: "-# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
+template: "> -# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
