@@ -129,6 +129,10 @@ def _on_post_api_request(**kwargs) -> None:
     _accumulator["last_model"] = kwargs.get("response_model") or kwargs.get("model", "?")
     _accumulator["last_provider"] = kwargs.get("provider", "")
     _accumulator["call_count"] = _accumulator.get("call_count", 0) + 1
+    _accumulator["finish_reason"] = kwargs.get("finish_reason", "")
+    _accumulator["message_count"] = kwargs.get("message_count", 0)
+    _accumulator["tool_call_count"] = kwargs.get("assistant_tool_call_count", 0)
+    _accumulator["content_chars"] = kwargs.get("assistant_content_chars", 0)
 
 
 # ---------------------------------------------------------------------------
@@ -147,14 +151,17 @@ def _build_status_line() -> str:
     duration = _fmt_duration(stats["total_duration"])
 
     usage = stats.get("last_usage") or {}
-    prompt_tokens = usage.get("prompt_tokens", 0) or 0
+    input_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0) or 0
+    output_tokens = usage.get("output_tokens", 0) or 0
+    total_tokens = usage.get("total_tokens", 0) or 0
+    cache_read = usage.get("cache_read_tokens", 0) or 0
     provider = stats.get("last_provider", "")
     model = stats.get("last_model", "?")
 
     ctx_window = _get_context_window(provider, model)
-    if ctx_window and prompt_tokens:
-        ctx_pct = f"{int(prompt_tokens / ctx_window * 100)}%"
-        tokens = f"( {_fmt_tokens(prompt_tokens)}/{_fmt_tokens(ctx_window)} )"
+    if ctx_window and input_tokens:
+        ctx_pct = f"{int(input_tokens / ctx_window * 100)}%"
+        tokens = f"( {_fmt_tokens(input_tokens)}/{_fmt_tokens(ctx_window)} )"
     else:
         ctx_pct = "?%"
         tokens = ""
@@ -163,6 +170,11 @@ def _build_status_line() -> str:
         model = model.split("/")[-1]
 
     call_count = str(stats.get("call_count", 1))
+    finish_reason = stats.get("finish_reason") or ""
+    msg_count = str(stats.get("message_count", 0))
+    tool_calls = str(stats.get("tool_call_count", 0))
+    chars = _fmt_tokens(stats.get("content_chars", 0))
+    cache_pct = f"{int(cache_read / input_tokens * 100)}%" if cache_read and input_tokens else ""
 
     variables = {
         "duration": duration,
@@ -170,6 +182,15 @@ def _build_status_line() -> str:
         "tokens": tokens,
         "model": model,
         "call_count": call_count,
+        "input_tokens": _fmt_tokens(input_tokens),
+        "output_tokens": _fmt_tokens(output_tokens),
+        "total_tokens": _fmt_tokens(total_tokens),
+        "cache_pct": cache_pct,
+        "finish_reason": finish_reason,
+        "msg_count": msg_count,
+        "tool_calls": tool_calls,
+        "chars": chars,
+        "provider": provider,
     }
 
     template = _get_template()

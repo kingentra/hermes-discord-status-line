@@ -9,10 +9,10 @@ Inspired by the status line format used in [Kimaki](https://github.com/remorses/
 ## What it looks like
 
 ```
--# *4.5s ⋅ 7% ⋅ ( 71K/1M ) ⋅ deepseek-v4-flash*
+*4.5s ⋅ 7% ⋅ ( 71K/1M ) ⋅ deepseek-v4-flash*
 ```
 
-Rendered as a subtle subtext line below the bot's response.
+Rendered as an italic line below the bot's response. (Use `-# *...*` in your template if you want Discord subtext instead.)
 
 ## Installation
 
@@ -29,15 +29,31 @@ Hermes auto-discovers plugins on startup. No other configuration needed.
 Edit `config.yaml` in the plugin directory to customize the format:
 
 ```yaml
-# Available variables:
-#   {duration}   - API time for the turn (e.g. "4.5s", "1m 23s")
-#   {ctx_pct}    - context window usage percentage (e.g. "7%", "?%")
-#   {tokens}     - used/total tokens (e.g. "( 71K/1M )", empty if unknown)
-#   {model}      - model name (e.g. "deepseek-v4-flash")
-#   {call_count} - number of API calls this turn (e.g. "3")
+# Available variables (see full reference below):
+#   {duration}   - API time for the turn
+#   {model}      - model name
 
 template: "-# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
 ```
+
+### Variable reference
+
+| Variable           | Description                          | Example            |
+| ------------------ | ------------------------------------ | ------------------ |
+| `{duration}`       | API time for the turn                | `4.5s`, `1m 23s`  |
+| `{ctx_pct}`        | Context window usage                 | `7%`, `?%`        |
+| `{tokens}`         | Used/total tokens                    | `( 71K/1M )`       |
+| `{model}`          | Model name                           | `deepseek-v4-flash` |
+| `{call_count}`     | API calls this turn                  | `3`               |
+| `{input_tokens}`   | Prompt/input tokens                  | `71K`             |
+| `{output_tokens}`  | Completion/output tokens             | `2.3K`            |
+| `{total_tokens}`   | Total tokens this turn               | `73K`             |
+| `{cache_pct}`      | Cache hit percentage                 | `82%`, empty if N/A |
+| `{finish_reason}`  | Why the model stopped                | `stop`, `length`, `tool_use` |
+| `{msg_count}`      | Messages sent in the API request     | `12`              |
+| `{tool_calls}`     | Tool calls in the response           | `3`, `0`          |
+| `{chars}`          | Characters in the assistant response | `1.2K`            |
+| `{provider}`       | API provider                         | `openrouter`      |
 
 ### Examples
 
@@ -61,6 +77,8 @@ template: "-# *{tokens} ⋅ {model}*"
 1. Hooks into `post_api_request` to accumulate per-turn API stats (duration, token usage, model, call count)
 2. Monkey-patches `DiscordAdapter.send` to append a follow-up message with the rendered template
 3. Reads `config.yaml` on first use (cached for the session)
+
+> **Warning:** This plugin currently uses monkey-patching because Hermes doesn't yet expose a hook for post-response actions. If Hermes renames or restructures its internal adapter, the plugin will break silently (the status line simply won't appear). Use at your own risk. See [Compatibility status](#compatibility-status) below.
 
 ## Compatibility status
 
