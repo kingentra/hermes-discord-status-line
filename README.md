@@ -65,6 +65,14 @@ template: "-# *{tokens} ⋅ {model}*"
 - **Enable**: plugin exists in `~/.hermes/plugins/` (loaded on Hermes startup)
 - **Disable**: remove the symlink or directory
 
+## Upstream dependency
+
+This plugin currently relies on monkey-patching `DiscordAdapter.send` to deliver the follow-up status line. There is an open PR on Hermes to natively propagate session context to plugin hooks, which would make this cleaner:
+
+**[#42416 -- feat(plugins): propagate session context to plugin hooks](https://github.com/NousResearch/hermes-agent/pull/42416)**
+
+Once merged, the monkey-patch can be replaced with a proper hook-based approach.
+
 ## Requirements
 
 - Hermes Agent with Discord platform support
