@@ -2,7 +2,9 @@
 
 A [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin that sends a customizable status line as a follow-up Discord message after each response.
 
-Shows API timing, context window usage, token counts, and model name — inspired by Claude Code's status line.
+Shows API timing, context window usage, token counts, and model name — inspired by [Claude Code's status line](https://code.claude.com/docs/en/statusline).
+
+Inspired by the status line format used in [Kimaki](https://github.com/remorses/kimaki).
 
 ## What it looks like
 

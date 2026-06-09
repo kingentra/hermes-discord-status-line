@@ -1,6 +1,6 @@
 name: discord-status-line
 version: 1.0.0
-description: "Sends a Kimaki-style status line as a follow-up Discord message after each response. Discord-only."
+description: "Sends a customizable status line as a follow-up Discord message after each response. Discord-only."
 author: "Hermana"
 python: ">=3.11"
 hooks:
