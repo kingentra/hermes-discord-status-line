@@ -62,18 +62,29 @@ template: "-# *{tokens} ⋅ {model}*"
 2. Monkey-patches `DiscordAdapter.send` to append a follow-up message with the rendered template
 3. Reads `config.yaml` on first use (cached for the session)
 
+## Compatibility status
+
+**Works today** with any Hermes instance that has Discord platform support. Symlink it in and restart.
+
+**Current limitations** (until upstream changes land):
+
+- The plugin monkey-patches `DiscordAdapter.send` because Hermes doesn't yet provide a hook for post-response actions. This is fragile — if Hermes renames or restructures the adapter, the plugin breaks silently (the status line just won't appear).
+- Context window percentage requires `agent.models_dev.get_model_capabilities` to be available. If it's missing, the plugin falls back to `?%` and omits the token count.
+- Only API-level data is available (duration, tokens, model). Session-level info like active personality, plugin state (e.g. whether a /converse mode is on), or session ID is not accessible to plugins yet.
+
+**Upstream PR** that would fix this:
+
+**[#42416 -- feat(plugins): propagate session context to plugin hooks](https://github.com/NousResearch/hermes-agent/pull/42416)**
+
+Once merged:
+- The monkey-patch can be replaced with a proper hook-based approach
+- New template variables become available: `{personality}`, `{session_id}`, plugin states, and anything else Hermes exposes through session context
+- The plugin becomes a clean citizen with no internal API dependencies
+
 ## Enabling / Disabling
 
 - **Enable**: plugin exists in `~/.hermes/plugins/` (loaded on Hermes startup)
 - **Disable**: remove the symlink or directory
-
-## Upstream dependency
-
-This plugin currently relies on monkey-patching `DiscordAdapter.send` to deliver the follow-up status line. There is an open PR on Hermes to natively propagate session context to plugin hooks, which would make this cleaner:
-
-**[#42416 -- feat(plugins): propagate session context to plugin hooks](https://github.com/NousResearch/hermes-agent/pull/42416)**
-
-Once merged, the monkey-patch can be replaced with a proper hook-based approach.
 
 ## Requirements
 
