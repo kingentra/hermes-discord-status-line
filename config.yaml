@@ -1,0 +1,11 @@
+# discord-status-line configuration
+# Edit this file to customize the status line format.
+# Available variables: {duration}, {ctx_pct}, {tokens}, {model}, {call_count}
+#
+# {duration}  - API time for the turn (e.g. "4.5s", "1m 23s")
+# {ctx_pct}   - context window usage percentage (e.g. "7%", "?%")
+# {tokens}    - used/total tokens (e.g. "( 71K/1M )", empty if unknown)
+# {model}     - model name (e.g. "deepseek-v4-flash")
+# {call_count} - number of API calls this turn (e.g. "3")
+
+template: "-# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
