@@ -6,11 +6,9 @@ Shows API timing, context window usage, token counts, and model name — inspire
 
 Inspired by the status line format used in [Kimaki](https://github.com/remorses/kimaki).
 
-## What it looks like
+## What it looks like (approximately)
 
-```
-*4.5s ⋅ 7% ⋅ ( 71K/1M ) ⋅ deepseek-v4-flash*
-```
+> -# *4.5s ⋅ 7% ⋅ ( 71K/1M ) ⋅ deepseek-v4-flash*
 
 Rendered as an italic line below the bot's response. (Use `-# *...*` in your template if you want Discord subtext instead.)
 
