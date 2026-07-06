@@ -52,6 +52,7 @@ template: "-# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
 | `{tool_calls}`     | Tool calls in the response           | `3`, `0`          |
 | `{chars}`          | Characters in the assistant response | `1.2K`            |
 | `{provider}`       | API provider                         | `openrouter`      |
+| `{session_id}`     | Hermes session ID for the turn       | `20260706_abc123` |
 
 ### Examples
 
@@ -70,6 +71,16 @@ Tokens only:
 template: "-# *{tokens} ⋅ {model}*"
 ```
 
+With session ID:
+```yaml
+template: "-# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}* `{session_id}`"
+```
+
+Session labeled:
+```yaml
+template: "-# *{duration} ⋅ {model}* `session:{session_id}`"
+```
+
 ## How it works
 
 1. Hooks into `post_api_request` to accumulate per-turn API stats (duration, token usage, model, call count)
@@ -86,7 +97,7 @@ template: "-# *{tokens} ⋅ {model}*"
 
 - The plugin monkey-patches `DiscordAdapter.send` because Hermes doesn't yet provide a hook for post-response actions. This is fragile — if Hermes renames or restructures the adapter, the plugin breaks silently (the status line just won't appear).
 - Context window percentage requires `agent.models_dev.get_model_capabilities` to be available. If it's missing, the plugin falls back to `?%` and omits the token count.
-- Only API-level data is available (duration, tokens, model). Session-level info like active personality, plugin state (e.g. whether a /converse mode is on), or session ID is not accessible to plugins yet.
+- Only API-level data is available (duration, tokens, model). Session-level info like active personality, plugin state (e.g. whether a /converse mode is on) is not accessible to plugins yet. Session ID (`{session_id}`) was added via hook kwargs and is now available as a template variable.
 
 **Upstream PR** that would fix this:
 
@@ -94,8 +105,10 @@ template: "-# *{tokens} ⋅ {model}*"
 
 Once merged:
 - The monkey-patch can be replaced with a proper hook-based approach
-- New template variables become available: `{personality}`, `{session_id}`, plugin states, and anything else Hermes exposes through session context
+- New template variables become available: `{personality}`, plugin states, and anything else Hermes exposes through session context
 - The plugin becomes a clean citizen with no internal API dependencies
+
+> **Note:** `{session_id}` was added ahead of this PR — it's already available via the existing `post_api_request` hook kwargs, captured and exposed as a template variable without needing the upstream change.
 
 ## Enabling / Disabling
 
