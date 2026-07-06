@@ -2,10 +2,11 @@
 message after each response.
 
 Template is configured in config.yaml alongside this file.
-Available variables: {duration}, {ctx_pct}, {tokens}, {model}, {call_count}
 
 Default template:
     -# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*
+
+Available variables: {duration}, {ctx_pct}, {tokens}, {model}, {call_count}, {input_tokens}, {output_tokens}, {total_tokens}, {cache_pct}, {finish_reason}, {msg_count}, {tool_calls}, {chars}, {provider}, {session_id}
 
 Enable/disable: load or unload the plugin. Plugin exists = enabled.
 Remove from ~/.hermes/plugins/ to disable.
@@ -119,11 +120,70 @@ def _fmt_duration(seconds: float) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Monkey-patch state (lazy — adapter loads after plugin register())
+# ---------------------------------------------------------------------------
+
+_PATCHED: bool = False
+_orig_send: Any = None
+
+
+async def _send_followup(self, chat_id: str, line: str, metadata: Any) -> None:
+    """Send the status line as a bare follow-up message."""
+    global _sending_followup
+    _sending_followup = True
+    try:
+        await _orig_send(self, chat_id, line, reply_to=None, metadata=metadata)
+    except Exception:
+        logger.warning("status-line: failed to send follow-up", exc_info=True)
+    finally:
+        _sending_followup = False
+
+
+def _apply_patch() -> None:
+    """Import DiscordAdapter and apply the send-patch.
+    
+    Called lazily on first use because the Discord platform adapter is
+    deferred-loaded and may not be available during plugin register().
+    """
+    global _PATCHED, _orig_send
+    try:
+        from hermes_plugins.discord_platform.adapter import DiscordAdapter
+    except ImportError:
+        # Not loaded yet — caller will retry on next hook invocation
+        return
+
+    _orig_send = DiscordAdapter.send
+
+    async def _patched_send(self, chat_id, content, reply_to=None, metadata=None):
+        global _sending_followup
+
+        # Call original send to deliver the main message
+        result = await _orig_send(self, chat_id, content, reply_to, metadata)
+
+        # Send follow-up status line if response succeeded and we have stats
+        if result.success and not _sending_followup:
+            line = _build_status_line()
+            if line:
+                await _send_followup(self, chat_id, line, metadata)
+
+        return result
+
+    DiscordAdapter.send = _patched_send
+    _PATCHED = True
+    logger.info("status-line: DiscordAdapter.send patched (deferred)")
+
+
+# ---------------------------------------------------------------------------
 # Hook handler
 # ---------------------------------------------------------------------------
 
 
 def _on_post_api_request(**kwargs) -> None:
+    # One-shot lazy patch: first hook call tries to install the
+    # monkey-patch.  By this point the Discord adapter should be loaded.
+    if not _PATCHED:
+        _apply_patch()
+
     _accumulator["total_duration"] = _accumulator.get("total_duration", 0.0) + float(kwargs.get("api_duration", 0))
     _accumulator["last_usage"] = kwargs.get("usage")
     _accumulator["last_model"] = kwargs.get("response_model") or kwargs.get("model", "?")
@@ -133,6 +193,7 @@ def _on_post_api_request(**kwargs) -> None:
     _accumulator["message_count"] = kwargs.get("message_count", 0)
     _accumulator["tool_call_count"] = kwargs.get("assistant_tool_call_count", 0)
     _accumulator["content_chars"] = kwargs.get("assistant_content_chars", 0)
+    _accumulator["session_id"] = kwargs.get("session_id", "")
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +252,7 @@ def _build_status_line() -> str:
         "tool_calls": tool_calls,
         "chars": chars,
         "provider": provider,
+        "session_id": stats.get("session_id", ""),
     }
 
     template = _get_template()
@@ -201,43 +263,14 @@ def _build_status_line() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Plugin registration -- hook + monkey-patch
+# Plugin registration
 # ---------------------------------------------------------------------------
 
 
 def register(ctx) -> None:
     ctx.register_hook("post_api_request", _on_post_api_request)
+    logger.debug("status-line: post_api_request hook registered")
 
-    # Monkey-patch DiscordAdapter.send to send status line as a follow-up
-    try:
-        from hermes_plugins.discord_platform.adapter import DiscordAdapter
-    except ImportError:
-        logger.warning("status-line: DiscordAdapter not found, skipping monkey-patch")
-        return
-
-    _orig_send = DiscordAdapter.send
-
-    async def _patched_send(self, chat_id, content, reply_to=None, metadata=None):
-        nonlocal _orig_send
-        global _sending_followup
-
-        # Call original send to deliver the main message
-        result = await _orig_send(self, chat_id, content, reply_to, metadata)
-
-        # Send follow-up status line if response succeeded and we have stats
-        if result.success and not _sending_followup:
-            line = _build_status_line()
-            if line:
-                _sending_followup = True
-                try:
-                    # Send to same place, no reply (bare status line)
-                    await _orig_send(self, chat_id, line, reply_to=None, metadata=metadata)
-                except Exception:
-                    logger.warning("status-line: failed to send follow-up", exc_info=True)
-                finally:
-                    _sending_followup = False
-
-        return result
-
-    DiscordAdapter.send = _patched_send
-    logger.info("status-line: plugin registered + DiscordAdapter.send patched")
+    # Monkey-patch is applied lazily on first hook call because the
+    # Discord platform adapter is deferred-loaded (not available at
+    # plugin startup time in the gateway).

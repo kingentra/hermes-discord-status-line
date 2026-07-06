@@ -16,5 +16,6 @@
 #   {tool_calls}     - tool calls in the response (e.g. "3", "0")
 #   {chars}          - characters in the assistant response (e.g. "1.2K")
 #   {provider}       - API provider (e.g. "openrouter", "anthropic")
+#   {session_id}     - the Hermes session ID this response belongs to
 
-template: "> -# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
+template: "> -# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}* `session:{session_id}`"
