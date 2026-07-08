@@ -1,16 +1,4 @@
-"""status-line -- sends a customizable status line as a separate Discord
-message after each response.
-
-Template is configured in config.yaml alongside this file.
-
-Default template:
-    -# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*
-
-Available variables: {duration}, {ctx_pct}, {tokens}, {model}, {call_count}, {input_tokens}, {output_tokens}, {total_tokens}, {cache_pct}, {finish_reason}, {msg_count}, {tool_calls}, {chars}, {provider}, {session_id}
-
-Enable/disable: load or unload the plugin. Plugin exists = enabled.
-Remove from ~/.hermes/plugins/ to disable.
-"""
+"""status-line plugin: send a configurable Discord status line after each response."""
 
 from __future__ import annotations
 
@@ -22,12 +10,13 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-
 _DEFAULT_TEMPLATE = "> -# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}*"
 _config_cache: Dict[str, Any] | None = None
+_accumulator: Dict[str, Any] = {}
+_sending_followup = False
+_PATCHED = False
+_orig_send: Any = None
+_ctx_window_cache: Dict[str, int] = {}
 
 
 def _load_config() -> Dict[str, Any]:
@@ -38,9 +27,9 @@ def _load_config() -> Dict[str, Any]:
     try:
         with open(cfg_path) as f:
             data = yaml.safe_load(f) or {}
-        _config_cache = data
     except Exception:
         data = {}
+    _config_cache = data
     return data
 
 
@@ -52,25 +41,9 @@ def reload_config() -> None:
     global _config_cache
     _config_cache = None
 
-# ---------------------------------------------------------------------------
-# Accumulator
-# ---------------------------------------------------------------------------
-
-_accumulator: Dict[str, Any] = {}
-
-# Re-entrancy guard: the follow-up send also goes through the monkey-patch
-_sending_followup: bool = False
-
 
 def _reset() -> None:
     _accumulator.clear()
-
-
-# ---------------------------------------------------------------------------
-# Context window lookup (cached per model)
-# ---------------------------------------------------------------------------
-
-_ctx_window_cache: Dict[str, int] = {}
 
 
 def _get_context_window(provider: str, model: str) -> int:
@@ -80,6 +53,7 @@ def _get_context_window(provider: str, model: str) -> int:
 
     try:
         from agent.models_dev import get_model_capabilities
+
         caps = get_model_capabilities(provider, model)
         window = caps.context_window if caps else 0
     except Exception:
@@ -89,11 +63,6 @@ def _get_context_window(provider: str, model: str) -> int:
     return window
 
 
-# ---------------------------------------------------------------------------
-# Token formatting
-# ---------------------------------------------------------------------------
-
-
 def _fmt_tokens(count: int) -> str:
     if count >= 1_000_000:
         return f"{count // 1_000_000}M"
@@ -101,11 +70,6 @@ def _fmt_tokens(count: int) -> str:
         val = count / 1_000
         return f"{val:.0f}K" if val >= 10 else f"{val:.1f}K"
     return str(count)
-
-
-# ---------------------------------------------------------------------------
-# Time formatting
-# ---------------------------------------------------------------------------
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -119,12 +83,15 @@ def _fmt_duration(seconds: float) -> str:
     return f"{h}h {m}m"
 
 
-# ---------------------------------------------------------------------------
-# Monkey-patch state (lazy — adapter loads after plugin register())
-# ---------------------------------------------------------------------------
-
-_PATCHED: bool = False
-_orig_send: Any = None
+def _format_ctx_pct(input_tokens: int, ctx_window: int) -> str:
+    if not ctx_window:
+        return "?%"
+    pct = (input_tokens / ctx_window) * 100 if ctx_window else 0.0
+    if input_tokens > 0 and pct < 1:
+        return "<1%"
+    if pct < 10:
+        return "0%" if input_tokens == 0 else f"{pct:.1f}%"
+    return f"{pct:.0f}%"
 
 
 async def _send_followup(self, chat_id: str, line: str, metadata: Any) -> None:
@@ -140,32 +107,22 @@ async def _send_followup(self, chat_id: str, line: str, metadata: Any) -> None:
 
 
 def _apply_patch() -> None:
-    """Import DiscordAdapter and apply the send-patch.
-    
-    Called lazily on first use because the Discord platform adapter is
-    deferred-loaded and may not be available during plugin register().
-    """
+    """Import DiscordAdapter and apply the send-patch lazily."""
     global _PATCHED, _orig_send
     try:
         from hermes_plugins.discord_platform.adapter import DiscordAdapter
     except ImportError:
-        # Not loaded yet — caller will retry on next hook invocation
         return
 
     _orig_send = DiscordAdapter.send
 
     async def _patched_send(self, chat_id, content, reply_to=None, metadata=None):
         global _sending_followup
-
-        # Call original send to deliver the main message
         result = await _orig_send(self, chat_id, content, reply_to, metadata)
-
-        # Send follow-up status line if response succeeded and we have stats
         if result.success and not _sending_followup:
             line = _build_status_line()
             if line:
                 await _send_followup(self, chat_id, line, metadata)
-
         return result
 
     DiscordAdapter.send = _patched_send
@@ -173,14 +130,7 @@ def _apply_patch() -> None:
     logger.info("status-line: DiscordAdapter.send patched (deferred)")
 
 
-# ---------------------------------------------------------------------------
-# Hook handler
-# ---------------------------------------------------------------------------
-
-
 def _on_post_api_request(**kwargs) -> None:
-    # One-shot lazy patch: first hook call tries to install the
-    # monkey-patch.  By this point the Discord adapter should be loaded.
     if not _PATCHED:
         _apply_patch()
 
@@ -196,11 +146,6 @@ def _on_post_api_request(**kwargs) -> None:
     _accumulator["session_id"] = kwargs.get("session_id", "")
 
 
-# ---------------------------------------------------------------------------
-# Status line builder
-# ---------------------------------------------------------------------------
-
-
 def _build_status_line() -> str:
     """Read and clear the accumulator. Return formatted status line or ''."""
     stats = dict(_accumulator)
@@ -210,7 +155,6 @@ def _build_status_line() -> str:
         return ""
 
     duration = _fmt_duration(stats["total_duration"])
-
     usage = stats.get("last_usage") or {}
     input_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0) or 0
     output_tokens = usage.get("output_tokens", 0) or 0
@@ -220,9 +164,9 @@ def _build_status_line() -> str:
     model = stats.get("last_model", "?")
 
     ctx_window = _get_context_window(provider, model)
-    if ctx_window and input_tokens:
-        ctx_pct = f"{int(input_tokens / ctx_window * 100)}%"
-        tokens = f"( {_fmt_tokens(input_tokens)}/{_fmt_tokens(ctx_window)} )"
+    if ctx_window and input_tokens is not None:
+        ctx_pct = _format_ctx_pct(int(input_tokens), ctx_window)
+        tokens = f"( {_fmt_tokens(int(input_tokens))}/{_fmt_tokens(ctx_window)} )"
     else:
         ctx_pct = "?%"
         tokens = ""
@@ -243,9 +187,9 @@ def _build_status_line() -> str:
         "tokens": tokens,
         "model": model,
         "call_count": call_count,
-        "input_tokens": _fmt_tokens(input_tokens),
-        "output_tokens": _fmt_tokens(output_tokens),
-        "total_tokens": _fmt_tokens(total_tokens),
+        "input_tokens": _fmt_tokens(int(input_tokens)),
+        "output_tokens": _fmt_tokens(int(output_tokens)),
+        "total_tokens": _fmt_tokens(int(total_tokens)),
         "cache_pct": cache_pct,
         "finish_reason": finish_reason,
         "msg_count": msg_count,
@@ -262,15 +206,6 @@ def _build_status_line() -> str:
         return _DEFAULT_TEMPLATE.format_map(variables)
 
 
-# ---------------------------------------------------------------------------
-# Plugin registration
-# ---------------------------------------------------------------------------
-
-
 def register(ctx) -> None:
     ctx.register_hook("post_api_request", _on_post_api_request)
     logger.debug("status-line: post_api_request hook registered")
-
-    # Monkey-patch is applied lazily on first hook call because the
-    # Discord platform adapter is deferred-loaded (not available at
-    # plugin startup time in the gateway).
