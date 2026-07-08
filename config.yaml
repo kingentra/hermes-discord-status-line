@@ -2,20 +2,20 @@
 # Edit this file to customize the status line format.
 #
 # Available variables:
-#   {duration}       - API time for the turn (e.g. "4.5s", "1m 23s")
-#   {ctx_pct}        - context window usage percentage (e.g. "7%", "?%")
-#   {tokens}         - used/total tokens (e.g. "( 71K/1M )", empty if unknown)
-#   {model}          - model name (e.g. "deepseek-v4-flash")
-#   {call_count}     - number of API calls this turn (e.g. "3")
-#   {input_tokens}   - prompt/input tokens used this turn (e.g. "71K")
-#   {output_tokens}  - completion/output tokens generated (e.g. "2.3K")
-#   {total_tokens}   - total tokens this turn (e.g. "73K")
-#   {cache_pct}      - cache hit percentage (e.g. "82%", "" if unknown)
-#   {finish_reason}  - why the model stopped (e.g. "stop", "length", "tool_use")
-#   {msg_count}      - messages sent in the API request (e.g. "12")
-#   {tool_calls}     - tool calls in the response (e.g. "3", "0")
-#   {chars}          - characters in the assistant response (e.g. "1.2K")
-#   {provider}       - API provider (e.g. "openrouter", "anthropic")
-#   {session_id}     - the Hermes session ID this response belongs to
+#   {duration}      - API time for the turn (e.g. "4.5s", "1m 23s")
+#   {ctx_pct}       - context window usage percentage (e.g. "7%", "?%")
+#   {tokens}        - used/total tokens (e.g. "( 71K/1M )", empty if unknown)
+#   {model}         - model name (e.g. "deepseek-v4-flash")
+#   {call_count}    - number of API calls this turn (e.g. "3")
+#   {input_tokens}  - prompt/input tokens used this turn (e.g. "71K")
+#   {output_tokens} - completion/output tokens generated (e.g. "2.3K")
+#   {total_tokens}  - total tokens this turn (e.g. "73K")
+#   {cache_pct}     - cache hit percentage (e.g. "82%", "" if unknown)
+#   {finish_reason} - why the model stopped (e.g. "stop", "length", "tool_use")
+#   {msg_count}     - messages sent in the API request (e.g. "12")
+#   {tool_calls}    - tool calls in the response (e.g. "3", "0")
+#   {chars}         - characters in the assistant response (e.g. "1.2K")
+#   {provider}      - API provider (e.g. "openrouter", "anthropic")
+#   {session_id}    - Hermes session ID for the turn (debug/private; avoid public channels)
 
-template: "> -# *{duration} ⋅ {ctx_pct} ⋅ {tokens} ⋅ {model}* `session:{session_id}`"
+template: "-# *{duration} • ctx {ctx_pct} • {tokens} • tools:{tool_calls} • {model}*"
